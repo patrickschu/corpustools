@@ -2,8 +2,8 @@ package corpustools
 
 import (
 	"bufio"
+	"compress/bzip2"
 	"encoding/json"
-	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -43,26 +43,6 @@ func ReadCorpusLine(inline []byte) Post {
 	return post
 }
 
-// each line corresponds to a post
-func ReadCorpusFile(inPath string) []Post {
-	var posts []Post
-	file, err := os.Open(inPath)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		//create new post here
-		post := ReadCorpusLine(scanner.Bytes())
-		posts = append(posts, post)
-	}
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-	return posts
-}
 
 // Walk over files in `RootDir`
 func WalkFolder(RootDir string) ([]string, error) {
@@ -89,16 +69,20 @@ func GetSubFolders(RootDir string) ([]string, error) {
 	return folders, err
 }
 
+
 // ReadCorpusFolder reads all files in `infolder` to Post objects
 func ReadCorpusFolder(Infolder string) []Post {
 	posts := []Post{}
 	// Find all files
 	inputFiles, err := WalkFolder(Infolder)
-	fmt.Println(inputFiles, err, posts)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Printf("Found %d files in Infolder %s", len(inputFiles), Infolder)
 	// Iterate over
 	for ind, infile := range inputFiles {
 		log.Printf("Working on file %s", infile)
+		// different treatment for txt v bzip2 files
 		posts = append(posts, ReadCorpusFile(infile)...)
 		log.Printf("Processed %d files", ind)
 	}
@@ -119,5 +103,56 @@ func ReadCorpus(Infolder string) []Post {
 		posts = append(posts, ReadCorpusFolder(infile)...)
 		log.Printf("Processed %d folders", ind)
 	}
+	return posts
+}
+
+// ReadCorpusTxtFile reads file where each line represents a JSON Reddit post
+func ReadCorpusTxtFile(inPath string) []Post {
+	var posts []Post
+	file, err := os.Open(inPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		//create new post here
+		post := ReadCorpusLine(scanner.Bytes())
+		posts = append(posts, post)
+	}
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+	return posts
+}
+
+// Identical to ReadCorpusTxtFile, but takes bzip2ed txt file as input
+func ReadBzipCorpusFile(inPath string) []Post {
+	var posts []Post
+	file, err := os.Open(inPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+	unzipreader := bzip2.NewReader(file)
+	scanner := bufio.NewScanner(unzipreader)
+	for scanner.Scan() {
+		post := ReadCorpusLine(scanner.Bytes())
+		posts = append(posts, post)
+	}
+	return posts
+}
+
+// ReadCorpusFile returns Posts from corpus files, either txt or bzipped files
+func ReadCorpusFile(inPath string) []Post {
+	posts := []Post{}
+	fileExt := filepath.Ext(inPath)
+	switch fileExt {
+		case "":
+			posts = append(posts, ReadCorpusTxtFile(inPath)...)
+		case ".bz2":
+			posts = append(posts, ReadBzipCorpusFile(inPath)...)
+		default:
+		}
 	return posts
 }

@@ -1,10 +1,7 @@
 package corpustools
 
 import (
-	"bufio"
-	"compress/bzip2"
 	"fmt"
-	"os"
 	"testing"
 )
 
@@ -25,25 +22,24 @@ func TestReadCorpusLine(t *testing.T) {
 	}
 }
 
-// func TestReadCorpusFile(t *testing.T) {
-// 	inpath := "/home/patrick/Documents/morph/corpustools/resources/RC_2007-10"
-// 	res := ReadCorpusFile(inpath)
-// 	if len(res) != 150429 {
-// 		t.Errorf("Incorrect number of post, received %d, want 150429", len(res))
-// 	}
-// 	// {c0299an bostich test 1192450635}
-// 	res1 := res[0]
-// 	if res1.author != "bostich" {
-// 		t.Errorf("Incorrect author, received %s", res1.author)
-// 	}
-// 	if res1.body != "test" {
-// 		t.Errorf("Incorrect body, received %s", res1.body)
-// 	}
-// 	if res1.created_utc != "1192450635" {
-// 		t.Errorf("Incorrect timestamp, received %s", res1.created_utc)
-// 	}
-
-// }
+func TestReadCorpusFile(t *testing.T) {
+ 	inpath := "/home/patrick/Documents/morph/corpustools/resources/RC_2007-10"
+ 	res := ReadCorpusFile(inpath)
+ 	if len(res) != 150429 {
+ 		t.Errorf("Incorrect number of post, received %d, want 150429", len(res))
+ 	}
+ 	// {c0299an bostich test 1192450635}
+ 	res1 := res[0]
+ 	if res1.author != "bostich" {
+ 		t.Errorf("Incorrect author, received %s", res1.author)
+ 	}
+ 	if res1.body != "test" {
+ 		t.Errorf("Incorrect body, received %s", res1.body)
+ 	}
+ 	if res1.created_utc != "1192450635" {
+ 		t.Errorf("Incorrect timestamp, received %s", res1.created_utc)
+ 	}
+ }
 
 func TestWalkFolder(t *testing.T) {
 	inpath := "/home/patrick/Documents/corpora/reddit_data"
@@ -72,7 +68,6 @@ func TestGetSubfolders(t *testing.T) {
 func TestReadCorpusFolder(t *testing.T) {
 	inpath := "/home/patrick/Documents/morph/corpustools/resources"
 	res := ReadCorpusFolder(inpath)
-	fmt.Println(res)
 	if res == nil {
 		t.Errorf("Error %v", res)
 	}
@@ -88,22 +83,17 @@ func TestReadCorpus(t *testing.T) {
 
 }
 
-func TestReader(t *testing.T) {
+func TestBzipReader(t *testing.T) {
 	inpath := "/home/patrick/Documents/morph/corpustools/resources/RC_2007-12.bz2"
-	// this thing needs to have an io.Reader as input
-	reader, err := os.Open(inpath)
-	unzipreader := bzip2.NewReader(reader)
-	fmt.Println(unzipreader)
-	if err != nil {
-		fmt.Println(err)
+	posts := ReadBzipCorpusFile(inpath)
+	if len(posts) != 363390 {
+		t.Errorf("Expected %d posts from %s, received %d", 363390, inpath, len(posts))
 	}
-	scanner := bufio.NewScanner(unzipreader)
-	var posts []Post
-	for scanner.Scan() {
-		//create new post here
-		post := ReadCorpusLine(scanner.Bytes())
-		posts = append(posts, post)
-	}
+}
+
+func TestReadCorpusFile2(t *testing.T) {
+	inpath := "/home/patrick/Documents/morph/corpustools/resources/RC_2007-12.bz2"
+	posts := ReadCorpusFile(inpath)
 	if len(posts) != 363390 {
 		t.Errorf("Expected %d posts from %s, received %d", 363390, inpath, len(posts))
 	}
