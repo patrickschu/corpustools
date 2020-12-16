@@ -1,12 +1,16 @@
-package corpustools
+package redditreader
 
 import (
 	"bufio"
 	"compress/bzip2"
+	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 // Read the Reddit file
@@ -32,6 +36,21 @@ type Post struct {
 	created_utc string
 }
 
+func (p Post) ToDB(Connector *pgxpool.Pool, TableName string) error {
+	tblinsert := fmt.Sprintf("INSERT into %s(id, body) VALUES ('%s', '%s')", TableName, p.id, "uiuiu")
+	//need to fix hardcoded table name here
+	tblinsert = `INSERT into $1 (id, body) VALUES ($2, $3) RETURNING id`
+	tblinsert = `INSERT into patts (id, body) VALUES ($1, $2) RETURNING id`
+	//fmt.Println(tblinsert)
+	//_, err := Connector.Exec(context.Background(), tblinsert)
+	var id string
+	err := Connector.QueryRow(context.Background(), tblinsert, p.id, p.body).Scan(&id)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 //Read the data from the line from JSON
 func ReadCorpusLine(inline []byte) Post {
 	var linedata map[string]string
@@ -42,7 +61,6 @@ func ReadCorpusLine(inline []byte) Post {
 		linedata["created_utc"]}
 	return post
 }
-
 
 // Walk over files in `RootDir`
 func WalkFolder(RootDir string) ([]string, error) {
@@ -68,7 +86,6 @@ func GetSubFolders(RootDir string) ([]string, error) {
 	})
 	return folders, err
 }
-
 
 // ReadCorpusFolder reads all files in `infolder` to Post objects
 func ReadCorpusFolder(Infolder string) []Post {
@@ -98,9 +115,9 @@ func ReadCorpus(Infolder string) []Post {
 	}
 	log.Printf("Found %d files in Infolder %s", len(subfolders), Infolder)
 	// Iterate over
-	for ind, infile := range subfolders {
-		log.Printf("Working on file %s", infile)
-		posts = append(posts, ReadCorpusFolder(infile)...)
+	for ind, infolder := range subfolders {
+		log.Printf("Working on folder %s", infolder)
+		posts = append(posts, ReadCorpusFolder(infolder)...)
 		log.Printf("Processed %d folders", ind)
 	}
 	return posts
@@ -148,11 +165,59 @@ func ReadCorpusFile(inPath string) []Post {
 	posts := []Post{}
 	fileExt := filepath.Ext(inPath)
 	switch fileExt {
-		case "":
-			posts = append(posts, ReadCorpusTxtFile(inPath)...)
-		case ".bz2":
-			posts = append(posts, ReadBzipCorpusFile(inPath)...)
-		default:
-		}
+	case "":
+		posts = append(posts, ReadCorpusTxtFile(inPath)...)
+	case ".bz2":
+		posts = append(posts, ReadBzipCorpusFile(inPath)...)
+	default:
+	}
 	return posts
+}
+
+//WriteCorpusToDB writes the `Infolder` to the database at `connector`
+func WriteCorpusToDB(Infolder string, Connector *pgxpool.Pool, TableName string) error {
+	// all files in Infolder need to be read, each Post writte to DB
+	// all the SQL strings should be done with $s
+	tbldrop := fmt.Sprintf("DROP TABLE IF EXISTS %s", TableName)
+	tblcreate := fmt.Sprintf("CREATE TABLE %s (id VARCHAR(20), body TEXT)", TableName)
+	// drop old table
+	_, err := Connector.Exec(context.Background(), tbldrop)
+	if err != nil {
+		log.Printf("Failed to create table %v\n", err)
+	}
+	// set up table
+	_, err = Connector.Exec(context.Background(), tblcreate)
+	if err != nil {
+		log.Printf("Failed to create table %v\n", err)
+	}
+	// iterate over all files in Infolder
+	subfolders, err := GetSubFolders(Infolder)
+	if err != nil {
+		log.Printf("Error %s", err)
+	}
+	log.Printf("Found %d files in Infolder %s", len(subfolders), Infolder)
+	for ind, path := range subfolders {
+		log.Printf("Writing subfolder %d: %s to DB", ind, path)
+		err = WriteCorpusFolderToDB(Infolder, Connector, TableName)
+	}
+	return nil
+}
+
+//WriteCorpusFolderToDB write the files in `Infolder` to the DB at `Connector`
+func WriteCorpusFolderToDB(Infolder string, Connector *pgxpool.Pool, TableName string) error {
+	// all files
+	inputFiles, err := WalkFolder(Infolder)
+	if err != nil {
+		log.Fatal(err)
+	}
+	for ind, path := range inputFiles {
+		log.Printf("Writing file %d from folder %s to DB", ind, Infolder)
+		for _, post := range ReadCorpusFile(path) {
+			dbErr := post.ToDB(Connector, TableName)
+			if dbErr != nil {
+				log.Printf("Error %v for post %s", dbErr, post.id)
+			}
+		}
+	}
+	return nil
 }

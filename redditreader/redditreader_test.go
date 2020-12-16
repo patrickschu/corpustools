@@ -1,12 +1,36 @@
-package corpustools
+package redditreader
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"os"
 	"testing"
+
+	"github.com/jackc/pgx/v4/pgxpool"
 )
 
 //Test  reading functionality
 
+func TestToDB(t *testing.T) {
+	// build DB
+	// Note that for the DATABASE_URL to work, PGDATABAASE needs to be set,
+	// e.g. `export PGDATABASE=patricktest`
+	log.Printf("Testing DB write")
+	os.Setenv("PGDATABASE", "patricktest")
+	inpath := "/home/patrick/Documents/morph/corpustools/resources/"
+	inpath = "/home/patrick/Documents/corpora/reddit_data"
+	dbpool, err := pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	err = WriteCorpusToDB(inpath, dbpool, "patts")
+	if err != nil {
+		t.Errorf("Error writing to DB %v", err)
+	}
+	// tear down DB
+}
 func TestReadCorpusLine(t *testing.T) {
 	tt := []byte(`{"gilded":0,"author_flair_text":null,"score_hidden":false,"body":"Alright I'm done.","author":"gigaquack","score":3,"link_id":"t3_5yba3","name":"t1_c0299az","retrieved_on":1427426409,"author_flair_css_class":null,"subreddit":"reddit.com","edited":false,"controversiality":0,"ups":3,"parent_id":"t1_c0299ax","created_utc":"1192450691","archived":true,"downs":0,"subreddit_id":"t5_6","id":"c0299az","distinguished":null}`)
 	res := ReadCorpusLine(tt)
@@ -23,23 +47,23 @@ func TestReadCorpusLine(t *testing.T) {
 }
 
 func TestReadCorpusFile(t *testing.T) {
- 	inpath := "/home/patrick/Documents/morph/corpustools/resources/RC_2007-10"
- 	res := ReadCorpusFile(inpath)
- 	if len(res) != 150429 {
- 		t.Errorf("Incorrect number of post, received %d, want 150429", len(res))
- 	}
- 	// {c0299an bostich test 1192450635}
- 	res1 := res[0]
- 	if res1.author != "bostich" {
- 		t.Errorf("Incorrect author, received %s", res1.author)
- 	}
- 	if res1.body != "test" {
- 		t.Errorf("Incorrect body, received %s", res1.body)
- 	}
- 	if res1.created_utc != "1192450635" {
- 		t.Errorf("Incorrect timestamp, received %s", res1.created_utc)
- 	}
- }
+	inpath := "/home/patrick/Documents/morph/corpustools/resources/RC_2007-10"
+	res := ReadCorpusFile(inpath)
+	if len(res) != 150429 {
+		t.Errorf("Incorrect number of post, received %d, want 150429", len(res))
+	}
+	// {c0299an bostich test 1192450635}
+	res1 := res[0]
+	if res1.author != "bostich" {
+		t.Errorf("Incorrect author, received %s", res1.author)
+	}
+	if res1.body != "test" {
+		t.Errorf("Incorrect body, received %s", res1.body)
+	}
+	if res1.created_utc != "1192450635" {
+		t.Errorf("Incorrect timestamp, received %s", res1.created_utc)
+	}
+}
 
 func TestWalkFolder(t *testing.T) {
 	inpath := "/home/patrick/Documents/corpora/reddit_data"
